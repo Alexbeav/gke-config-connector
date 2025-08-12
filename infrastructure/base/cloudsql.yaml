@@ -1,0 +1,101 @@
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLInstance
+metadata:
+  name: postgres-primary
+  labels:
+    component: database
+    managed-by: config-connector
+spec:
+  databaseVersion: "POSTGRES_14"
+  region: "us-central1"
+  settings:
+    tier: "db-custom-2-8192"  # 2 vCPUs, 8GB RAM
+    availabilityType: "REGIONAL"  # High availability
+    diskType: "PD_SSD"
+    diskSize: 100
+    diskAutoresize: true
+    diskAutoresizeLimit: 500
+    diskEncryptionConfiguration:
+      kmsKeyName: "projects/secure-gke-gitops-platform/locations/us-central1/keyRings/data-platform-keyring/cryptoKeys/cloudsql-encryption-key"
+    backupConfiguration:
+      enabled: true
+      startTime: "03:00"  # 3 AM UTC
+      pointInTimeRecoveryEnabled: true
+      backupRetentionSettings:
+        retainedBackups: 30
+        retentionUnit: "COUNT"
+    maintenanceWindow:
+      day: 1  # Sunday
+      hour: 4  # 4 AM UTC
+      updateTrack: "stable"
+    databaseFlags:
+      - name: "log_statement"
+        value: "all"
+      - name: "log_min_duration_statement" 
+        value: "1000"  # Log queries taking more than 1 second
+    ipConfiguration:
+      ipv4Enabled: false  # Private only
+      privateNetwork: "projects/secure-gke-gitops-platform/global/networks/secure-vpc"
+      requireSsl: true
+    insights:
+      queryInsightsEnabled: true
+      recordApplicationTags: true
+      recordClientAddress: true
+    deletionProtection: true
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    data-classification: "confidential"
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLDatabase
+metadata:
+  name: application-db
+  labels:
+    component: database
+    managed-by: config-connector
+spec:
+  charset: "UTF8"
+  collation: "en_US.UTF8"
+  instanceRef:
+    name: postgres-primary
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLDatabase
+metadata:
+  name: analytics-db
+  labels:
+    component: database
+    managed-by: config-connector
+spec:
+  charset: "UTF8"
+  collation: "en_US.UTF8"
+  instanceRef:
+    name: postgres-primary
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLUser
+metadata:
+  name: app-user
+  labels:
+    component: database
+    managed-by: config-connector
+spec:
+  instanceRef:
+    name: postgres-primary
+  password:
+    valueFrom:
+      secretKeyRef:
+        name: postgres-app-user-password
+        key: password
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-app-user-password
+  labels:
+    component: database
+    managed-by: config-connector
+type: Opaque
+data:
+  password: "Y2hhbmdlLW1lLXBsZWFzZQ=="  # "change-me-please" - Replace with actual password

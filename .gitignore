@@ -1,0 +1,109 @@
+# Security and Credentials
+*.zip
+*.tar.gz
+.env
+.env.local
+.env.production
+*.key
+*.pem
+*.p12
+*.json
+service-account-*.json
+gcp-*.json
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Terraform (if used alongside)
+*.tfstate
+*.tfstate.backup
+.terraform/
+terraform.tfvars
+
+# Kubernetes configs
+kubeconfig
+*.kubeconfig
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Dependencies
+node_modules/
+vendor/
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# OS/Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Python virtualenvs
+venv/
+.env
+
+# Kubernetes/Helm/ArgoCD artifacts
+*.log
+*.out
+*.bak
+
+# Terraform state (if used)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Secrets (never commit real secrets!)
+secrets.yaml
+*.enc.yaml
+
+# GitHub credentials and sensitive files
+.env.local
+.credentials
+github_token*
+argocd-credentials*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Infrastructure processed files (generated)
+infrastructure-processed/
+
+# CI/CD artifacts
+coverage/
+dist/
+build/
+*.egg-info/
+
+# Local overrides
+local.env
+.envrc
+
+# Node/npm (if used for tooling)
+node_modules/
+
+# Misc
+*.tmp
+*.cache

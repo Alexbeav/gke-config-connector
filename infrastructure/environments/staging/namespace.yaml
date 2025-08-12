@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    environment: "staging"
+    team: "data-engineering"
+    managed-by: "config-connector"
+  annotations:
+    description: "Staging environment for data platform"

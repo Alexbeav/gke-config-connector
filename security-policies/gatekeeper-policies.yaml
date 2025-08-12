@@ -1,0 +1,201 @@
+apiVersion: templates.gatekeeper.sh/v1alpha1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+  annotations:
+    description: "Requires resources to contain specified labels, with values matching provided regular expressions."
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredLabels
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            labels:
+              type: array
+              description: "A list of labels and values the object must specify."
+              items:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    description: "The required label."
+                  allowedRegex:
+                    type: string
+                    description: "If specified, a regular expression the annotation's value must match."
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredlabels
+
+        get_message(parameters, _default) = msg {
+          not parameters.message
+          msg := _default
+        }
+
+        get_message(parameters, _default) = msg {
+          msg := parameters.message
+        }
+
+        violation[{"msg": msg}] {
+          required := input.parameters.labels
+          provided := input.review.object.metadata.labels
+          missing := required[_]
+          not provided[missing.key]
+          def_msg := sprintf("Missing required label: %v", [missing.key])
+          msg := get_message(input.parameters, def_msg)
+        }
+
+        violation[{"msg": msg}] {
+          required := input.parameters.labels
+          provided := input.review.object.metadata.labels
+          missing := required[_]
+          required_regex := missing.allowedRegex
+          provided_value := provided[missing.key]
+          not regex.match(required_regex, provided_value)
+          def_msg := sprintf("Label %v: %v does not match required regex: %v", [missing.key, provided_value, required_regex])
+          msg := get_message(input.parameters, def_msg)
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: namespace-must-have-environment
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Namespace"]
+    excludedNamespaces: ["kube-system", "kube-public", "gatekeeper-system", "config-connector-system", "cnrm-system", "argocd"]
+  parameters:
+    labels:
+      - key: "environment"
+        allowedRegex: "^(dev|staging|prod)$"
+      - key: "team"
+        allowedRegex: "^[a-z][a-z0-9-]*[a-z0-9]$"
+---
+apiVersion: templates.gatekeeper.sh/v1alpha1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredresources
+  annotations:
+    description: "Requires containers to have defined resource requests and limits."
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredResources
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            limits:
+              type: array
+              description: "A list of limits that should be enforced (cpu, memory)."
+              items:
+                type: string
+            requests:
+              type: array
+              description: "A list of requests that should be enforced (cpu, memory)."
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredresources
+
+        violation[{"msg": msg}] {
+          required_limits := input.parameters.limits
+          required_limit := required_limits[_]
+          container := input.review.object.spec.containers[_]
+          not container.resources.limits[required_limit]
+          msg := sprintf("Container %v is missing required limit %v", [container.name, required_limit])
+        }
+
+        violation[{"msg": msg}] {
+          required_requests := input.parameters.requests
+          required_request := required_requests[_]
+          container := input.review.object.spec.containers[_]
+          not container.resources.requests[required_request]
+          msg := sprintf("Container %v is missing required request %v", [container.name, required_request])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredResources
+metadata:
+  name: container-must-have-resources
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet"]
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces: ["kube-system", "gatekeeper-system", "config-connector-system", "cnrm-system"]
+  parameters:
+    limits: ["cpu", "memory"]
+    requests: ["cpu", "memory"]
+---
+apiVersion: templates.gatekeeper.sh/v1alpha1
+kind: ConstraintTemplate
+metadata:
+  name: k8sallowedrepos
+  annotations:
+    description: "Requires container images to begin with a string from the specified list."
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sAllowedRepos
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            repos:
+              description: The list of prefixes a container image is allowed to have.
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sallowedrepos
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not starts_with_allowed_prefix(container.image)
+          msg := sprintf("container <%v> has an invalid image repo <%v>, allowed repos are %v", [container.name, container.image, input.parameters.repos])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.initContainers[_]
+          not starts_with_allowed_prefix(container.image)
+          msg := sprintf("initContainer <%v> has an invalid image repo <%v>, allowed repos are %v", [container.name, container.image, input.parameters.repos])
+        }
+
+        starts_with_allowed_prefix(image) {
+          prefix := input.parameters.repos[_]
+          startswith(image, prefix)
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  name: allowed-repos-prod
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet"]
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["prod"]
+  parameters:
+    repos:
+      - "gcr.io/google-containers/"
+      - "gcr.io/gke-release/"
+      - "us-docker.pkg.dev/"
+      - "gcr.io/"
+      - "registry.k8s.io/"

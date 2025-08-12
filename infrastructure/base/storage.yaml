@@ -1,0 +1,119 @@
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  name: data-ingest-bucket
+  labels:
+    component: storage
+    managed-by: config-connector
+spec:
+  bucketPolicyOnly: true
+  uniformBucketLevelAccess: true
+  publicAccessPrevention: "enforced"
+  versioning:
+    enabled: true
+  encryption:
+    defaultKmsKeyName: "projects/secure-gke-gitops-platform/locations/us-central1/keyRings/data-platform-keyring/cryptoKeys/storage-encryption-key"
+  retentionPolicy:
+    retentionPeriod: 2592000  # 30 days minimum retention
+  lifecycleRule:
+    - action:
+        type: "Delete"
+      condition:
+        age: 365  # Delete objects after 1 year
+    - action:
+        type: "SetStorageClass"
+        storageClass: "NEARLINE"
+      condition:
+        age: 30  # Move to Nearline after 30 days
+    - action:
+        type: "SetStorageClass" 
+        storageClass: "COLDLINE"
+      condition:
+        age: 90  # Move to Coldline after 90 days
+  location: "US"
+  storageClass: "STANDARD"
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    purpose: "data-ingest"
+    data-classification: "confidential"
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  name: processed-data-bucket
+  labels:
+    component: storage
+    managed-by: config-connector
+spec:
+  bucketPolicyOnly: true
+  uniformBucketLevelAccess: true
+  publicAccessPrevention: "enforced"
+  versioning:
+    enabled: true
+  encryption:
+    defaultKmsKeyName: "projects/secure-gke-gitops-platform/locations/us-central1/keyRings/data-platform-keyring/cryptoKeys/storage-encryption-key"
+  retentionPolicy:
+    retentionPeriod: 5184000  # 60 days minimum retention
+  lifecycleRule:
+    - action:
+        type: "Delete"
+      condition:
+        age: 2555  # Delete after 7 years (compliance requirement)
+    - action:
+        type: "SetStorageClass"
+        storageClass: "NEARLINE"
+      condition:
+        age: 60  # Move to Nearline after 60 days
+    - action:
+        type: "SetStorageClass"
+        storageClass: "COLDLINE" 
+      condition:
+        age: 180  # Move to Coldline after 180 days
+    - action:
+        type: "SetStorageClass"
+        storageClass: "ARCHIVE"
+      condition:
+        age: 365  # Move to Archive after 1 year
+  location: "US"
+  storageClass: "STANDARD"
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    purpose: "processed-data"
+    data-classification: "internal"
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  name: backup-bucket
+  labels:
+    component: storage
+    managed-by: config-connector
+spec:
+  bucketPolicyOnly: true
+  uniformBucketLevelAccess: true
+  publicAccessPrevention: "enforced"
+  versioning:
+    enabled: true
+  encryption:
+    defaultKmsKeyName: "projects/secure-gke-gitops-platform/locations/us-central1/keyRings/data-platform-keyring/cryptoKeys/storage-encryption-key"
+  retentionPolicy:
+    retentionPeriod: 7776000  # 90 days minimum retention for backups
+  lifecycleRule:
+    - action:
+        type: "Delete"
+      condition:
+        age: 2555  # Delete after 7 years
+    - action:
+        type: "SetStorageClass"
+        storageClass: "ARCHIVE"
+      condition:
+        age: 1  # Immediately move to Archive (backup data)
+  location: "US"
+  storageClass: "STANDARD"  # Will be moved to ARCHIVE immediately
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    purpose: "backup"
+    data-classification: "confidential"

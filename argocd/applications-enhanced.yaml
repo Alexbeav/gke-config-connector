@@ -1,0 +1,251 @@
+# Enhanced Argo CD Applications with Security Features
+# Production-ready GitOps applications with proper RBAC and security controls
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-infrastructure
+  namespace: argocd
+  labels:
+    environment: dev
+    team: platform-engineering
+    security-level: standard
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: data-platform
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME
+    targetRevision: HEAD
+    path: infrastructure/environments/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data
+    - group: kms.cnrm.cloud.google.com
+      kind: KMSCryptoKey
+      jsonPointers:
+        - /status
+  info:
+    - name: 'Environment'
+      value: 'Development'
+    - name: 'Auto-Sync'
+      value: 'Enabled'
+    - name: 'Security Level'
+      value: 'Standard'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: staging-infrastructure
+  namespace: argocd
+  labels:
+    environment: staging
+    team: platform-engineering
+    security-level: enhanced
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-running.slack: staging-deployments
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: staging-deployments
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: staging-alerts
+spec:
+  project: data-platform
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME
+    targetRevision: HEAD
+    path: infrastructure/environments/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: staging
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 15
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data
+    - group: kms.cnrm.cloud.google.com
+      kind: KMSCryptoKey
+      jsonPointers:
+        - /status
+  info:
+    - name: 'Environment'
+      value: 'Staging'
+    - name: 'Sync Policy'
+      value: 'Manual approval required'
+    - name: 'Security Level'
+      value: 'Enhanced'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prod-infrastructure
+  namespace: argocd
+  labels:
+    environment: prod
+    team: platform-engineering
+    security-level: maximum
+    compliance: required
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-running.slack: prod-deployments
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: prod-deployments
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: prod-alerts
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: prod-alerts
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  project: data-platform
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME
+    targetRevision: HEAD
+    path: infrastructure/environments/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 30
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data
+    - group: kms.cnrm.cloud.google.com
+      kind: KMSCryptoKey
+      jsonPointers:
+        - /status
+    - group: monitoring.cnrm.cloud.google.com
+      kind: MonitoringAlertPolicy
+      jsonPointers:
+        - /status
+  info:
+    - name: 'Environment'
+      value: 'Production'
+    - name: 'Sync Policy'
+      value: 'Manual with security review'
+    - name: 'Change Window'
+      value: 'Sunday 06:00-08:00 UTC'
+    - name: 'Security Level'
+      value: 'Maximum'
+    - name: 'Compliance'
+      value: 'SOX/GDPR'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: security-baseline
+  namespace: argocd
+  labels:
+    component: security
+    team: security-engineering
+    security-level: critical
+spec:
+  project: data-platform
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME
+    targetRevision: HEAD
+    path: security-policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: security-baseline
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 20
+  info:
+    - name: 'Component'
+      value: 'Security Baseline'
+    - name: 'Team'
+      value: 'Security Engineering'
+    - name: 'Purpose'
+      value: 'Org policies and security controls'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-stack
+  namespace: argocd
+  labels:
+    component: monitoring
+    team: sre
+spec:
+  project: data-platform
+  source:
+    repoURL: https://github.com/Alexbeav/gke-config-connector
+    targetRevision: HEAD
+    path: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
+  info:
+    - name: 'Component'
+      value: 'Monitoring and Alerting'
+    - name: 'Team'
+      value: 'SRE'

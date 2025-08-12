@@ -1,0 +1,185 @@
+# Enhanced Security Monitoring and Audit Logging
+# Comprehensive logging, monitoring, and security alerting
+
+# Security audit log sink to BigQuery for analysis
+apiVersion: logging.cnrm.cloud.google.com/v1beta1
+kind: LoggingLogSink
+metadata:
+  name: security-audit-sink
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  destination: "bigquery.googleapis.com/projects/secure-gke-gitops-platform/datasets/security_audit_logs"
+  description: "Security audit logs for compliance and monitoring"
+  filter: |
+    protoPayload.serviceName="cloudresourcemanager.googleapis.com" OR
+    protoPayload.serviceName="iam.googleapis.com" OR
+    protoPayload.serviceName="container.googleapis.com" OR
+    protoPayload.methodName="SetIamPolicy" OR
+    protoPayload.methodName="CreateServiceAccount" OR
+    protoPayload.methodName="DeleteServiceAccount" OR
+    severity="ERROR"
+  includeChildren: true
+  uniqueWriterIdentity: true
+---
+# Config Connector resource changes sink
+apiVersion: logging.cnrm.cloud.google.com/v1beta1
+kind: LoggingLogSink
+metadata:
+  name: config-connector-audit-sink
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  destination: "storage.googleapis.com/security-audit-logs-bucket"
+  description: "Config Connector resource changes for audit trail"
+  filter: |
+    resource.type="k8s_cluster" AND
+    protoPayload.serviceName="k8s.io" AND
+    protoPayload.methodName:("create" OR "update" OR "delete")
+  includeChildren: true
+  uniqueWriterIdentity: true
+---
+# Data access logging configuration
+apiVersion: logging.cnrm.cloud.google.com/v1beta1
+kind: LoggingProjectSink
+metadata:
+  name: data-access-logs
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  destination: "bigquery.googleapis.com/projects/secure-gke-gitops-platform/datasets/data_access_logs"
+  description: "Data access logs for BigQuery and Storage"
+  filter: |
+    protoPayload.serviceName="bigquery.googleapis.com" OR
+    protoPayload.serviceName="storage.googleapis.com"
+  uniqueWriterIdentity: true
+---
+# Security alert policy for suspicious IAM changes
+apiVersion: monitoring.cnrm.cloud.google.com/v1beta1
+kind: MonitoringAlertPolicy
+metadata:
+  name: suspicious-iam-changes
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  displayName: "Suspicious IAM Policy Changes"
+  documentation:
+    content: |
+      This alert triggers when there are unusual IAM policy changes that may indicate
+      a security incident or unauthorized access.
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "High frequency IAM changes"
+      conditionThreshold:
+        filter: |
+          resource.type="project" AND
+          protoPayload.methodName="SetIamPolicy"
+        comparison: "COMPARISON_GREATER_THAN"
+        thresholdValue: 5
+        duration: "300s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: "ALIGN_RATE"
+            crossSeriesReducer: "REDUCE_SUM"
+  alertStrategy:
+    autoClose: "604800s"  # 7 days
+  enabled: true
+  notificationChannels:
+    - "projects/secure-gke-gitops-platform/notificationChannels/security-team"
+---
+# Alert for failed authentication attempts
+apiVersion: monitoring.cnrm.cloud.google.com/v1beta1
+kind: MonitoringAlertPolicy
+metadata:
+  name: failed-auth-attempts
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  displayName: "Failed Authentication Attempts"
+  documentation:
+    content: "Alert for high number of failed authentication attempts"
+  conditions:
+    - displayName: "Authentication failures"
+      conditionThreshold:
+        filter: |
+          protoPayload.authenticationInfo.principalEmail!="" AND
+          severity="ERROR" AND
+          protoPayload.status.code!=0
+        comparison: "COMPARISON_GREATER_THAN"
+        thresholdValue: 10
+        duration: "300s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: "ALIGN_RATE"
+            crossSeriesReducer: "REDUCE_SUM"
+  enabled: true
+---
+# Alert for Config Connector resource failures
+apiVersion: monitoring.cnrm.cloud.google.com/v1beta1
+kind: MonitoringAlertPolicy
+metadata:
+  name: config-connector-failures
+  labels:
+    component: monitoring
+    managed-by: config-connector
+spec:
+  displayName: "Config Connector Resource Failures"
+  documentation:
+    content: "Alert when Config Connector fails to create or update resources"
+  conditions:
+    - displayName: "Resource creation failures"
+      conditionThreshold:
+        filter: |
+          resource.type="k8s_container" AND
+          resource.labels.container_name="manager" AND
+          resource.labels.namespace_name="cnrm-system" AND
+          severity="ERROR"
+        comparison: "COMPARISON_GREATER_THAN"
+        thresholdValue: 3
+        duration: "300s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: "ALIGN_RATE"
+            crossSeriesReducer: "REDUCE_SUM"
+  enabled: true
+---
+# Security Command Center notification
+apiVersion: securitycenter.cnrm.cloud.google.com/v1beta1
+kind: SecurityCenterNotificationConfig
+metadata:
+  name: security-findings-notification
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  organizationRef:
+    external: "123456789012"
+  configId: "security-findings-pubsub"
+  description: "Security Command Center findings notification"
+  pubsubTopicRef:
+    name: security-findings-topic
+  streamingConfig:
+    filter: |
+      state="ACTIVE" AND
+      (category="MALWARE" OR category="UNAUTHORIZED_ACCESS" OR 
+       category="DATA_EXFILTRATION" OR category="PRIVILEGE_ESCALATION")
+---
+# Pub/Sub topic for security findings
+apiVersion: pubsub.cnrm.cloud.google.com/v1beta1
+kind: PubSubTopic
+metadata:
+  name: security-findings-topic
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  displayName: "Security Command Center Findings"
+  labels:
+    environment: "security"
+    team: "security-operations"
+  messageRetentionDuration: "2592000s"  # 30 days

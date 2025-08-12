@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: project-config
+  namespace: dev
+data:
+  project_id: "secure-gke-gitops-platform"
+  environment: "dev"
+  region: "us-central1"
+  zone: "us-central1-a"

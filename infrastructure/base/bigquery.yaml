@@ -1,0 +1,201 @@
+apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+kind: BigQueryDataset
+metadata:
+  name: logs-dataset
+  labels:
+    component: analytics
+    managed-by: config-connector
+spec:
+  friendlyName: "Application Logs Dataset"
+  description: "Dataset for storing application and infrastructure logs"
+  location: "US"
+  defaultTableExpirationMs: 7776000000  # 90 days
+  defaultEncryptionConfiguration:
+    kmsKeyName: "projects/secure-gke-gitops-platform/locations/us-central1/keyRings/data-platform-keyring/cryptoKeys/bigquery-encryption-key"
+  access:
+    - role: "OWNER"
+      userByEmail: "data-team@company.com"
+    - role: "READER" 
+      specialGroup: "projectReaders"
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    data-classification: "internal"
+---
+apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+kind: BigQueryDataset
+metadata:
+  name: data-platform-dataset
+  labels:
+    component: warehouse
+    managed-by: config-connector
+spec:
+  datasetId: "data_platform"
+  location: "US"
+  description: "Main dataset for data platform"
+  defaultTableExpirationMs: 15552000000  # 180 days
+  defaultPartitionExpirationMs: 15552000000  # 180 days
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    data-classification: "confidential"
+  defaultEncryptionConfiguration:
+    kmsKeyName: "projects/secure-gke-gitops-platform/locations/us/keyRings/data-platform-keyring/cryptoKeys/bigquery-encryption-key"
+  access:
+    - role: "OWNER"
+      userByEmail: "data-admin@example.com"
+    - role: "READER"
+      groupByEmail: "data-analysts@example.com"
+    - role: "WRITER"
+      serviceAccountEmail: "bigquery-dataflow-sa@secure-gke-gitops-platform.iam.gserviceaccount.com"
+---
+apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+kind: BigQueryTable
+metadata:
+  name: raw-events-table
+  labels:
+    component: warehouse
+    managed-by: config-connector
+spec:
+  datasetId: "data_platform"
+  tableId: "raw_events"
+  schema: |
+    [
+      {
+        "name": "event_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "event_type",
+        "type": "STRING",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "properties",
+        "type": "JSON",
+        "mode": "NULLABLE"
+      }
+    ]
+  timePartitioning:
+    type: "DAY"
+    field: "timestamp"
+    expirationMs: 15552000000  # 180 days
+  clustering:
+    - "event_type"
+    - "user_id"
+  encryptionConfiguration:
+    kmsKeyName: "projects/secure-gke-gitops-platform/locations/us/keyRings/data-platform-keyring/cryptoKeys/bigquery-encryption-key"
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    data-classification: "sensitive"
+---
+apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+kind: BigQueryTable
+metadata:
+  name: processed-analytics-table
+  labels:
+    component: warehouse
+    managed-by: config-connector
+spec:
+  datasetId: "data_platform"
+  tableId: "processed_analytics"
+  schema: |
+    [
+      {
+        "name": "date",
+        "type": "DATE",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "metric_name",
+        "type": "STRING",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "value",
+        "type": "FLOAT64",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "dimensions",
+        "type": "JSON",
+        "mode": "NULLABLE"
+      }
+    ]
+  timePartitioning:
+    type: "DAY"
+    field: "date"
+    expirationMs: 31536000000  # 365 days
+  clustering:
+    - "metric_name"
+    - "date"
+  encryptionConfiguration:
+    kmsKeyName: "projects/secure-gke-gitops-platform/locations/us/keyRings/data-platform-keyring/cryptoKeys/bigquery-encryption-key"
+  labels:
+    environment: "placeholder"
+    team: "data-engineering"
+    data-classification: "internal"
+---
+apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+kind: BigQueryTable
+metadata:
+  name: user-events-table
+  labels:
+    component: analytics
+    managed-by: config-connector
+spec:
+  datasetRef:
+    name: logs-dataset
+  friendlyName: "User Events Table"
+  description: "Table for storing user interaction events"
+  timePartitioning:
+    type: "DAY"
+    field: "event_timestamp"
+  clustering:
+    - "user_id"
+    - "event_type"
+  schema: |
+    [
+      {
+        "name": "event_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "Unique identifier for the event"
+      },
+      {
+        "name": "user_id", 
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "User identifier"
+      },
+      {
+        "name": "event_type",
+        "type": "STRING", 
+        "mode": "REQUIRED",
+        "description": "Type of user event"
+      },
+      {
+        "name": "event_timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED", 
+        "description": "When the event occurred"
+      },
+      {
+        "name": "properties",
+        "type": "JSON",
+        "mode": "NULLABLE",
+        "description": "Additional event properties"
+      }
+    ]

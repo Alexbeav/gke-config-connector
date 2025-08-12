@@ -1,0 +1,124 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-infrastructure
+  namespace: argocd
+  labels:
+    environment: dev
+    team: data-engineering
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME  # Update with your repository
+    targetRevision: HEAD
+    path: infrastructure/environments/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: postgres-app-user-password
+      jsonPointers:
+        - /data/password
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: staging-infrastructure
+  namespace: argocd
+  labels:
+    environment: staging
+    team: data-engineering
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME  # Update with your repository
+    targetRevision: HEAD
+    path: infrastructure/environments/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: staging
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: postgres-app-user-password
+      jsonPointers:
+        - /data/password
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prod-infrastructure
+  namespace: argocd
+  labels:
+    environment: prod
+    team: data-engineering
+    criticality: high
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME  # Update with your repository
+    targetRevision: HEAD
+    path: infrastructure/environments/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
+  revisionHistoryLimit: 20
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: postgres-app-user-password
+      jsonPointers:
+        - /data/password
+    - group: monitoring.cnrm.cloud.google.com
+      kind: MonitoringAlertPolicy
+      jsonPointers:
+        - /spec/creationRecord
+        - /spec/mutationRecord

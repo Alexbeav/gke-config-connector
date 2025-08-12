@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+  labels:
+    environment: "prod"
+    team: "data-engineering"
+    managed-by: "config-connector"
+    backup-required: "true"
+  annotations:
+    description: "Production environment for data platform"
+    compliance-level: "high"

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security-baseline
+  labels:
+    name: security-baseline
+    component: security
+    environment: prod
+    team: security
+    managed-by: argocd

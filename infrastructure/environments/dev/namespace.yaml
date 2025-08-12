@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    environment: "dev"
+    team: "data-engineering"
+    managed-by: "config-connector"
+  annotations:
+    description: "Development environment for data platform"

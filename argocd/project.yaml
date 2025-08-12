@@ -1,0 +1,122 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: data-platform
+  namespace: argocd
+  labels:
+    team: data-engineering
+spec:
+  description: "Data Platform Infrastructure Project"
+  
+  # Source repositories
+  sourceRepos:
+    - https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME
+    - https://github.com/GoogleCloudPlatform/k8s-config-connector
+  
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: dev
+      server: https://kubernetes.default.svc
+    - namespace: staging
+      server: https://kubernetes.default.svc
+    - namespace: prod
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+    - namespace: security-baseline
+      server: https://kubernetes.default.svc
+    - namespace: cnrm-system
+      server: https://kubernetes.default.svc
+  
+  # Cluster resource whitelist
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    # Gatekeeper resources
+    - group: templates.gatekeeper.sh
+      kind: ConstraintTemplate
+    - group: config.gatekeeper.sh
+      kind: Config
+    - group: status.gatekeeper.sh
+      kind: "*"
+    - group: mutations.gatekeeper.sh
+      kind: "*"
+    - group: constraints.gatekeeper.sh
+      kind: "*"
+  
+  # Namespace resource whitelist
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    # Config Connector CRDs
+    - group: bigquery.cnrm.cloud.google.com
+      kind: "*"
+    - group: pubsub.cnrm.cloud.google.com
+      kind: "*"
+    - group: storage.cnrm.cloud.google.com
+      kind: "*"
+    - group: sql.cnrm.cloud.google.com
+      kind: "*"
+    - group: iam.cnrm.cloud.google.com
+      kind: "*"
+    - group: compute.cnrm.cloud.google.com
+      kind: "*"
+    - group: monitoring.cnrm.cloud.google.com
+      kind: "*"
+    - group: logging.cnrm.cloud.google.com
+      kind: "*"
+    - group: cloudscheduler.cnrm.cloud.google.com
+      kind: "*"
+    # Gatekeeper constraint resources
+    - group: constraints.gatekeeper.sh
+      kind: "*"
+  
+  # RBAC policies
+  roles:
+    # Development team role
+    - name: dev-team
+      description: "Development team access"
+      policies:
+        - p, proj:data-platform:dev-team, applications, get, data-platform/dev-*, allow
+        - p, proj:data-platform:dev-team, applications, sync, data-platform/dev-*, allow
+        - p, proj:data-platform:dev-team, applications, action/*, data-platform/dev-*, allow
+        - p, proj:data-platform:dev-team, logs, get, data-platform/dev-*, allow
+        - p, proj:data-platform:dev-team, exec, create, data-platform/dev-*, allow
+      groups:
+        - dev-team@company.com
+    
+    # Production team role  
+    - name: prod-team
+      description: "Production team access"
+      policies:
+        - p, proj:data-platform:prod-team, applications, get, data-platform/*, allow
+        - p, proj:data-platform:prod-team, applications, sync, data-platform/prod-*, allow
+        - p, proj:data-platform:prod-team, applications, action/*, data-platform/*, allow
+        - p, proj:data-platform:prod-team, logs, get, data-platform/*, allow
+      groups:
+        - prod-team@company.com
+        - sre-team@company.com
+  
+  # Sync windows for maintenance
+  syncWindows:
+    - kind: allow
+      schedule: "0 6 * * *"  # Allow syncs at 6 AM UTC
+      duration: 2h
+      applications:
+        - prod-infrastructure
+      manualSync: true
+    - kind: deny
+      schedule: "0 18 * * 1-5"  # Deny syncs during business hours on weekdays
+      duration: 12h
+      applications:
+        - prod-infrastructure

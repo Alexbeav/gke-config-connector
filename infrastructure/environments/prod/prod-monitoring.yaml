@@ -1,0 +1,64 @@
+# Production-specific monitoring and alerting
+apiVersion: monitoring.cnrm.cloud.google.com/v1beta1
+kind: MonitoringAlertPolicy
+metadata:
+  name: high-pubsub-message-age
+  labels:
+    component: monitoring
+    managed-by: config-connector
+spec:
+  displayName: "High Pub/Sub Message Age"
+  documentation:
+    content: "Alert when Pub/Sub messages are not being processed in a timely manner"
+  conditions:
+    - displayName: "Message age too high"
+      conditionThreshold:
+        filter: 'resource.type="pubsub_subscription"'
+        comparison: "COMPARISON_GREATER_THAN"
+        thresholdValue: 300  # 5 minutes
+        duration: "60s"
+        aggregations:
+          - alignmentPeriod: "60s"
+            perSeriesAligner: "ALIGN_MEAN"
+            crossSeriesReducer: "REDUCE_MEAN"
+            groupByFields:
+              - "resource.label.subscription_id"
+  enabled: true
+  alertStrategy:
+    autoClose: "604800s"  # 7 days
+---
+apiVersion: monitoring.cnrm.cloud.google.com/v1beta1
+kind: MonitoringAlertPolicy
+metadata:
+  name: cloud-sql-high-connections
+  labels:
+    component: monitoring
+    managed-by: config-connector
+spec:
+  displayName: "Cloud SQL High Connection Count"
+  documentation:
+    content: "Alert when Cloud SQL instance has high connection usage"
+  conditions:
+    - displayName: "Connection count too high"
+      conditionThreshold:
+        filter: 'resource.type="cloudsql_database"'
+        comparison: "COMPARISON_GREATER_THAN"
+        thresholdValue: 80  # 80% of max connections
+        duration: "300s"  # 5 minutes
+        aggregations:
+          - alignmentPeriod: "60s"
+            perSeriesAligner: "ALIGN_MEAN"
+            crossSeriesReducer: "REDUCE_MEAN"
+  enabled: true
+---
+apiVersion: logging.cnrm.cloud.google.com/v1beta1
+kind: LoggingLogSink
+metadata:
+  name: audit-logs-sink
+  labels:
+    component: logging
+    managed-by: config-connector
+spec:
+  destination: "storage.googleapis.com/prod-audit-logs-bucket"
+  filter: 'protoPayload.serviceName="cloudresourcemanager.googleapis.com" OR protoPayload.serviceName="bigquery.googleapis.com"'
+  uniqueWriterIdentity: true

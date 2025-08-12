@@ -1,0 +1,142 @@
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: data-pipeline-sa
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  displayName: "Data Pipeline Service Account"
+  description: "Service account for data pipeline workloads"
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: analytics-sa
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  displayName: "Analytics Service Account"
+  description: "Service account for analytics workloads"
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: backup-sa
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  displayName: "Backup Service Account"
+  description: "Service account for backup operations"
+---
+# BigQuery permissions for data pipeline
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: data-pipeline-bq-admin
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/bigquery.dataEditor
+  resourceRef:
+    apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+    kind: BigQueryDataset
+    name: logs-dataset
+---
+# Pub/Sub permissions for data pipeline
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: data-pipeline-pubsub-publisher
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/pubsub.publisher
+  resourceRef:
+    apiVersion: pubsub.cnrm.cloud.google.com/v1beta1
+    kind: PubSubTopic
+    name: user-events-topic
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: data-pipeline-pubsub-subscriber
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/pubsub.subscriber
+  resourceRef:
+    apiVersion: pubsub.cnrm.cloud.google.com/v1beta1
+    kind: PubSubSubscription
+    name: user-events-subscription
+---
+# Storage permissions for data pipeline
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: data-pipeline-storage-writer
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/storage.objectCreator
+  resourceRef:
+    apiVersion: storage.cnrm.cloud.google.com/v1beta1
+    kind: StorageBucket
+    name: data-ingest-bucket
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: data-pipeline-storage-reader
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/storage.objectViewer
+  resourceRef:
+    apiVersion: storage.cnrm.cloud.google.com/v1beta1
+    kind: StorageBucket
+    name: processed-data-bucket
+---
+# Analytics service account permissions
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: analytics-bq-reader
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:analytics-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/bigquery.dataViewer
+  resourceRef:
+    apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+    kind: BigQueryDataset
+    name: analytics-dataset
+---
+# Backup service account permissions
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: backup-storage-admin
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:backup-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/storage.admin
+  resourceRef:
+    apiVersion: storage.cnrm.cloud.google.com/v1beta1
+    kind: StorageBucket
+    name: backup-bucket

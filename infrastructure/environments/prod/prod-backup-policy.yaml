@@ -1,0 +1,79 @@
+# Production backup policies and disaster recovery
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  name: audit-logs-bucket
+  labels:
+    component: compliance
+    managed-by: config-connector
+spec:
+  bucketPolicyOnly: true
+  versioning:
+    enabled: true
+  lifecycle:
+    rule:
+      - action:
+          type: "SetStorageClass"
+          storageClass: "ARCHIVE"
+        condition:
+          age: 90  # Move to Archive after 90 days
+      - action:
+          type: "Delete"
+        condition:
+          age: 2555  # Delete after 7 years (compliance requirement)
+  location: "US"
+  storageClass: "STANDARD"
+  retentionPolicy:
+    retentionPeriod: 7776000  # 90 days minimum retention
+  labels:
+    environment: "prod"
+    purpose: "audit-logs"
+    compliance: "required"
+---
+# Cross-region backup bucket
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  name: disaster-recovery-bucket
+  labels:
+    component: backup
+    managed-by: config-connector
+spec:
+  bucketPolicyOnly: true
+  versioning:
+    enabled: true
+  lifecycle:
+    rule:
+      - action:
+          type: "Delete"
+        condition:
+          age: 2555  # 7 years retention
+  location: "EU"  # Different region for disaster recovery
+  storageClass: "COLDLINE"
+  labels:
+    environment: "prod"
+    purpose: "disaster-recovery"
+---
+# Scheduled backup job using Cloud Scheduler
+apiVersion: cloudscheduler.cnrm.cloud.google.com/v1beta1
+kind: CloudSchedulerJob
+metadata:
+  name: daily-backup-job
+  labels:
+    component: backup
+    managed-by: config-connector
+spec:
+  description: "Daily backup of critical data"
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  timeZone: "UTC"
+  httpTarget:
+    uri: "https://us-central1-secure-gke-gitops-platform.cloudfunctions.net/backup-function"
+    httpMethod: "POST"
+    headers:
+      Content-Type: "application/json"
+    body: |
+      {
+        "source_datasets": ["prod-logs-dataset", "prod-analytics-dataset"],
+        "destination_bucket": "prod-disaster-recovery-bucket",
+        "retention_days": 30
+      }

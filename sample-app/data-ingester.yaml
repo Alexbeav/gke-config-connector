@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-ingester
+  labels:
+    app: data-ingester
+    component: ingestion
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: data-ingester
+  template:
+    metadata:
+      labels:
+        app: data-ingester
+        component: ingestion
+    spec:
+      serviceAccountName: data-pipeline-workload
+      containers:
+        - name: data-ingester
+          image: gcr.io/PROJECT_ID/data-ingester:latest
+          env:
+            - name: PROJECT_ID
+              value: "PROJECT_ID"
+            - name: PUBSUB_TOPIC
+              value: "user-events-topic"
+            - name: ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-ingester-service
+  labels:
+    app: data-ingester
+spec:
+  selector:
+    app: data-ingester
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-pipeline-workload
+  annotations:
+    iam.gke.io/gcp-service-account: data-pipeline-sa@PROJECT_ID.iam.gserviceaccount.com

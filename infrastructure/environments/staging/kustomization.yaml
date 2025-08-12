@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: staging-environment
+
+# Reference to base infrastructure
+resources:
+  - ../../base
+  - namespace.yaml
+  - project-config.yaml
+
+# Namespace for all resources
+namespace: staging
+
+# Environment-specific prefix
+namePrefix: ""
+
+# Environment-specific labels
+commonLabels:
+  environment: "staging"
+  team: "data-engineering"
+
+# Environment-specific annotations
+commonAnnotations:
+  environment: "staging"
+  managed-by: "config-connector"
+
+# Patches for staging-specific configurations
+patches:
+  # Moderate Pub/Sub message retention for staging
+  - target:
+      kind: PubSubTopic
+      name: dev-user-events-topic
+    patch: |
+      - op: replace
+        path: /spec/messageRetentionDuration
+        value: "432000s"  # 5 days
+      - op: replace
+        path: /metadata/name
+        value: staging-user-events-topic
+        
+  # Update PubSub subscription to reference the renamed topic
+  - target:
+      kind: PubSubSubscription
+      name: dev-user-events-subscription
+    patch: |
+      - op: replace
+        path: /spec/topicRef/name
+        value: staging-user-events-topic
+      - op: replace
+        path: /metadata/name
+        value: staging-user-events-subscription
+        
+  # Staging storage - moderate lifecycle
+  - target:
+      kind: StorageBucket
+      name: dev-data-ingest-bucket
+    patch: |
+      - op: replace
+        path: /spec/lifecycleRule/0/condition/age
+        value: 60  # 60 days retention
+      - op: replace
+        path: /metadata/name
+        value: staging-data-ingest-bucket

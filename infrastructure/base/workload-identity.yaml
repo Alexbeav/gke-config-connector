@@ -1,0 +1,192 @@
+# Workload Identity Federation and Enhanced IAM Security
+# Zero-trust authentication without service account keys
+
+# Workload Identity Pool for external authentication
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMWorkloadIdentityPool
+metadata:
+  name: gitops-identity-pool
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  workloadIdentityPoolId: "gitops-pool"
+  displayName: "GitOps Workload Identity Pool"
+  description: "Identity pool for GitOps CI/CD workflows"
+  disabled: false
+---
+# GitHub Actions provider for CI/CD authentication
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMWorkloadIdentityPoolProvider
+metadata:
+  name: github-actions-provider
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  workloadIdentityPoolRef:
+    name: gitops-identity-pool
+  workloadIdentityPoolProviderId: "github-actions"
+  displayName: "GitHub Actions Provider"
+  description: "Provider for GitHub Actions authentication"
+  oidc:
+    issuerUri: "https://token.actions.githubusercontent.com"
+  attributeMapping:
+    "google.subject": "assertion.sub"
+    "attribute.actor": "assertion.actor"
+    "attribute.repository": "assertion.repository"
+  attributeCondition: |
+    assertion.repository=="your-org/data-platform-infrastructure" &&
+    assertion.ref=="refs/heads/main"
+---
+# Enhanced service account with IAM conditions
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: secure-data-pipeline-sa
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  displayName: "Secure Data Pipeline Service Account"
+  description: "Service account with time and IP-based access conditions"
+---
+# IAM policy with conditional access
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicy
+metadata:
+  name: conditional-bigquery-access
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  resourceRef:
+    apiVersion: bigquery.cnrm.cloud.google.com/v1beta1
+    kind: BigQueryDataset
+    name: logs-dataset
+  bindings:
+    - role: "roles/bigquery.dataEditor"
+      members:
+        - "serviceAccount:secure-data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com"
+      condition:
+        title: "Time and IP restricted access"
+        description: "Access only during business hours from corporate network"
+        expression: |
+          request.time.getHours() >= 8 && request.time.getHours() <= 18 &&
+          inIpRange(origin.ip, '203.0.113.0/24')
+---
+# Cross-environment service account isolation
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: dev-environment-isolation
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:dev-data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/resourcemanager.projectViewer
+  condition:
+    title: "Dev environment only"
+    description: "Access restricted to dev namespace resources"
+    expression: |
+      has(resource.labels.environment) && 
+      resource.labels.environment == "dev"
+  resourceRef:
+    apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
+    kind: Project
+    external: "secure-gke-gitops-platform"
+---
+# Break-glass emergency access service account
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: emergency-access-sa
+  labels:
+    component: iam
+    managed-by: config-connector
+    emergency-access: "true"
+  annotations:
+    emergency-contact: "sre-team@company.com"
+    usage-policy: "emergency-only"
+spec:
+  displayName: "Emergency Break Glass Access"
+  description: "Emergency access for critical incidents - use only with approval"
+---
+# Break-glass access with strict conditions
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: emergency-admin-access
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:emergency-access-sa@secure-gke-gitops-platform.iam.gserviceaccount.com
+  role: roles/editor
+  condition:
+    title: "Emergency access with approval"
+    description: "Admin access only during declared incidents"
+    expression: |
+      request.time.getHours() >= 0 && request.time.getHours() <= 24 &&
+      has(request.auth.access_levels) && 
+      "emergency_approved" in request.auth.access_levels
+  resourceRef:
+    apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
+    kind: Project
+    external: "secure-gke-gitops-platform"
+---
+# Kubernetes service account bindings with Workload Identity
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: workload-identity-dev-binding
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:secure-gke-gitops-platform.svc.id.goog[dev/data-pipeline-workload]
+  role: roles/iam.workloadIdentityUser
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name: dev-data-pipeline-sa
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: workload-identity-prod-binding
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  member: serviceAccount:secure-gke-gitops-platform.svc.id.goog[prod/data-pipeline-workload]
+  role: roles/iam.workloadIdentityUser
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name: secure-data-pipeline-sa
+---
+# IAM deny policy for additional security
+apiVersion: iam.cnrm.cloud.google.com/v1alpha1
+kind: IAMDenyPolicy
+metadata:
+  name: deny-external-access
+  labels:
+    component: iam
+    managed-by: config-connector
+spec:
+  parent: "projects/secure-gke-gitops-platform"
+  displayName: "Deny External Access"
+  rules:
+    - denyRule:
+        deniedPrincipals:
+          - "allUsers"
+          - "allAuthenticatedUsers"
+        deniedPermissions:
+          - "storage.objects.get"
+          - "storage.objects.list"
+          - "bigquery.datasets.get"
+        exceptionPrincipals:
+          - "serviceAccount:secure-data-pipeline-sa@secure-gke-gitops-platform.iam.gserviceaccount.com"
+      description: "Deny public access to sensitive resources"

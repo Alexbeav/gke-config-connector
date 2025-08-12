@@ -1,0 +1,227 @@
+# Customer-Managed Encryption Keys (CMEK) and Advanced Security
+# Enterprise-grade encryption and data protection
+
+# KMS Key Ring for data platform encryption
+apiVersion: kms.cnrm.cloud.google.com/v1beta1
+kind: KMSKeyRing
+metadata:
+  name: data-platform-keyring
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  location: "us-central1"
+---
+# BigQuery encryption key
+apiVersion: kms.cnrm.cloud.google.com/v1beta1
+kind: KMSCryptoKey
+metadata:
+  name: bigquery-encryption-key
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  keyRingRef:
+    name: data-platform-keyring
+  purpose: "ENCRYPT_DECRYPT"
+  rotationPeriod: "2592000s"  # 30 days
+  versionTemplate:
+    algorithm: "GOOGLE_SYMMETRIC_ENCRYPTION"
+    protectionLevel: "SOFTWARE"
+  labels:
+    service: "bigquery"
+    environment: "placeholder"
+---
+# Cloud SQL encryption key
+apiVersion: kms.cnrm.cloud.google.com/v1beta1
+kind: KMSCryptoKey
+metadata:
+  name: cloudsql-encryption-key
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  keyRingRef:
+    name: data-platform-keyring
+  purpose: "ENCRYPT_DECRYPT"
+  rotationPeriod: "2592000s"  # 30 days
+  versionTemplate:
+    algorithm: "GOOGLE_SYMMETRIC_ENCRYPTION"
+    protectionLevel: "SOFTWARE"
+  labels:
+    service: "cloudsql"
+    environment: "placeholder"
+---
+# Storage bucket encryption key
+apiVersion: kms.cnrm.cloud.google.com/v1beta1
+kind: KMSCryptoKey
+metadata:
+  name: storage-encryption-key
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  keyRingRef:
+    name: data-platform-keyring
+  purpose: "ENCRYPT_DECRYPT"
+  rotationPeriod: "2592000s"  # 30 days
+  versionTemplate:
+    algorithm: "GOOGLE_SYMMETRIC_ENCRYPTION"
+    protectionLevel: "SOFTWARE"
+  labels:
+    service: "storage"
+    environment: "placeholder"
+---
+# Pub/Sub encryption key
+apiVersion: kms.cnrm.cloud.google.com/v1beta1
+kind: KMSCryptoKey
+metadata:
+  name: pubsub-encryption-key
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  keyRingRef:
+    name: data-platform-keyring
+  purpose: "ENCRYPT_DECRYPT"
+  rotationPeriod: "2592000s"  # 30 days
+  versionTemplate:
+    algorithm: "GOOGLE_SYMMETRIC_ENCRYPTION"
+    protectionLevel: "SOFTWARE"
+  labels:
+    service: "pubsub"
+    environment: "placeholder"
+---
+# IAM permissions for KMS keys
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: bigquery-kms-access
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  member: serviceAccount:service-658917303406@gcp-sa-bigquery.iam.gserviceaccount.com
+  role: roles/cloudkms.cryptoKeyEncrypterDecrypter
+  resourceRef:
+    apiVersion: kms.cnrm.cloud.google.com/v1beta1
+    kind: KMSCryptoKey
+    name: bigquery-encryption-key
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: cloudsql-kms-access
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  member: serviceAccount:service-658917303406@gcp-sa-cloud-sql.iam.gserviceaccount.com
+  role: roles/cloudkms.cryptoKeyEncrypterDecrypter
+  resourceRef:
+    apiVersion: kms.cnrm.cloud.google.com/v1beta1
+    kind: KMSCryptoKey
+    name: cloudsql-encryption-key
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: storage-kms-access
+  labels:
+    component: encryption
+    managed-by: config-connector
+spec:
+  member: serviceAccount:service-658917303406@gs-project-accounts.iam.gserviceaccount.com
+  role: roles/cloudkms.cryptoKeyEncrypterDecrypter
+  resourceRef:
+    apiVersion: kms.cnrm.cloud.google.com/v1beta1
+    kind: KMSCryptoKey
+    name: storage-encryption-key
+---
+# Data Loss Prevention (DLP) configuration
+apiVersion: dlp.cnrm.cloud.google.com/v1beta1
+kind: DLPInspectTemplate
+metadata:
+  name: pii-detection-template
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  displayName: "PII Detection Template"
+  description: "Template for detecting personally identifiable information"
+  inspectConfig:
+    infoTypes:
+      - name: "EMAIL_ADDRESS"
+      - name: "PHONE_NUMBER"
+      - name: "CREDIT_CARD_NUMBER"
+      - name: "US_SOCIAL_SECURITY_NUMBER"
+      - name: "IBAN_CODE"
+    includeQuote: true
+    minLikelihood: "LIKELY"
+    limits:
+      maxFindingsPerRequest: 100
+---
+apiVersion: dlp.cnrm.cloud.google.com/v1beta1
+kind: DLPJobTrigger
+metadata:
+  name: bigquery-dlp-scan
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  displayName: "BigQuery PII Scan"
+  description: "Scheduled scan for PII in BigQuery datasets"
+  triggers:
+    - schedule:
+        recurrencePeriodDuration: "604800s"  # Weekly
+  inspectJob:
+    inspectTemplateRef:
+      name: pii-detection-template
+    storageConfig:
+      bigQueryOptions:
+        tableReference:
+          projectId: "secure-gke-gitops-platform"
+          datasetId: "logs-dataset"
+          tableId: "user-events-table"
+        rowsLimit: 1000
+        sampleMethod: "RANDOM_START"
+    actions:
+      - publishToPubSub:
+          topic: "projects/secure-gke-gitops-platform/topics/dlp-findings"
+      - publishSummaryToCscc: {}
+---
+# Binary Authorization policy for container security
+apiVersion: binaryauthorization.cnrm.cloud.google.com/v1beta1
+kind: BinaryAuthorizationPolicy
+metadata:
+  name: container-security-policy
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  description: "Binary authorization policy requiring signed containers"
+  defaultAdmissionRule:
+    evaluationMode: "REQUIRE_ATTESTATION"
+    enforcementMode: "ENFORCED_BLOCK_AND_AUDIT_LOG"
+    requireAttestationsBy:
+      - "projects/secure-gke-gitops-platform/attestors/prod-attestor"
+  clusterAdmissionRules:
+    "us-central1.gitops-data-platform":
+      evaluationMode: "REQUIRE_ATTESTATION"
+      enforcementMode: "ENFORCED_BLOCK_AND_AUDIT_LOG"
+      requireAttestationsBy:
+        - "projects/secure-gke-gitops-platform/attestors/prod-attestor"
+---
+# Container image attestor
+apiVersion: binaryauthorization.cnrm.cloud.google.com/v1beta1
+kind: BinaryAuthorizationAttestor
+metadata:
+  name: prod-attestor
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  description: "Production container attestor for signed images"
+  userOwnedGrafeasNote:
+    noteReference: "projects/secure-gke-gitops-platform/notes/prod-attestor-note"
+    delegationServiceAccountEmail: "prod-attestor@secure-gke-gitops-platform.iam.gserviceaccount.com"

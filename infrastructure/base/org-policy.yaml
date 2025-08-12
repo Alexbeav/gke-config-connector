@@ -1,0 +1,101 @@
+# Organization Policy Constraints for Enterprise Security
+# These policies enforce security and compliance requirements at the organization level
+
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: restrict-external-ips
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "compute.vmExternalIpAccess"
+  booleanPolicy:
+    enforced: true
+  projectRef:
+    external: "secure-gke-gitops-platform"
+---
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: disable-legacy-networks
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "compute.skipDefaultNetworkCreation"
+  booleanPolicy:
+    enforced: true
+  projectRef:
+    external: "secure-gke-gitops-platform"
+---
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: require-shielded-vms
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "compute.requireShieldedVm"
+  booleanPolicy:
+    enforced: true
+  projectRef:
+    external: "secure-gke-gitops-platform"
+---
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: restrict-public-buckets
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "storage.publicAccessPrevention"
+  listPolicy:
+    allowedValues:
+      - "enforced"
+  projectRef:
+    external: "secure-gke-gitops-platform"
+---
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: restrict-service-accounts
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "iam.automaticIamGrantsForDefaultServiceAccounts"
+  booleanPolicy:
+    enforced: true
+  projectRef:
+    external: "secure-gke-gitops-platform"
+---
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: disable-sa-key-creation
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "iam.disableServiceAccountKeyCreation"
+  booleanPolicy:
+    enforced: true
+  projectRef:
+    external: "secure-gke-gitops-platform"
+---
+apiVersion: orgpolicy.cnrm.cloud.google.com/v1beta1
+kind: OrganizationPolicy
+metadata:
+  name: enforce-uniform-bucket-access
+  labels:
+    component: security
+    managed-by: config-connector
+spec:
+  constraint: "storage.uniformBucketLevelAccess"
+  booleanPolicy:
+    enforced: true
+  projectRef:
+    external: "secure-gke-gitops-platform"

@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: base-infrastructure
+
+# Base resources that will be inherited by all environments
+resources:
+  - simplified-basic.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/managed-by: "config-connector"
+  app.kubernetes.io/part-of: "data-platform"
+
+# Common annotations
+commonAnnotations:
+  cnrm.cloud.google.com/project-id: "secure-gke-gitops-platform"
+  
+# Resources that can be referenced by name
+namePrefix: ""
